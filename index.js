@@ -1,5 +1,22 @@
-const imageForm = document.querySelector("#imageForm");
-const imageInput = document.querySelector("#imageInput");
+class File {
+  static singleUploadApiUrl =
+    "https://9qg7r5m84e.execute-api.us-east-1.amazonaws.com/dev/single-upload";
+  static multipartInitiateApiUrl =
+    "https://u3rl4do60b.execute-api.us-east-1.amazonaws.com/dev/initiate-multipart";
+  static multipartUploadApiUrl =
+    "https://6ctfudi0sg.execute-api.us-east-1.amazonaws.com/dev/multipart-upload";
+  static completeUploadApiUrl =
+    "https://yfpe8cha8i.execute-api.us-east-1.amazonaws.com/dev/complete-upload";
+
+  constructor(file, name, size, type) {
+    this.file = file;
+    this.name = name;
+    this.size = size;
+    this.type = type;
+    this.keyname = generateKey(name);
+    this.filesizeinMB = Math.ceil(size / (1024 * 1024));
+  }
+}
 
 const printLog = (logtext) => {
   var d = new Date();
@@ -9,37 +26,38 @@ const printLog = (logtext) => {
   console.log(logtext1);
 };
 
-imageForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const file = fileinput.files[0];
-  const originalname = file.name;
+const generateKey = (originalname) => {
   const d = new Date();
   let text = d.toISOString().substring(0, 16);
-  let fileName = text + "/" + originalname;
-  const fileType = file.type;
-  const fileSize = file.size;
+  let keyname = text + "/" + originalname;
+  return keyname;
+};
+
+const imageForm = document.querySelector("#imageForm");
+const imageInput = document.querySelector("#imageInput");
+imageForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const file = fileinput.files[0];
+
+  const fileInfo = new File(file, file.name, file.size, file.type);
   const CHUNK_SIZE = document.getElementById("chunk-select").value;
   const maxChunkSize = CHUNK_SIZE * 1024 * 1024;
-  const BucketName = "publicdummybucketofmine127809";
-  const filesizeinMB = Math.ceil(fileSize / (1024 * 1024));
-
   const completeParts = [];
-  printLog("Receivd upload request for file : " + originalname);
+  printLog("Receivd upload request for file : " + fileInfo.name);
   printLog("Chunk size selected :" + CHUNK_SIZE + " MB.");
 
-  // printLog(fileSize / (1024 * 1024));
-
-  const initiateData = {
-    BucketName,
-    fileName,
+  const initiateMultipartBody = {
+    fileName: fileInfo.keyname,
   };
-  printLog("Unique key for your file :" + fileName);
 
-  if (filesizeinMB > CHUNK_SIZE) {
-    const parts = Math.ceil(filesizeinMB / CHUNK_SIZE);
+  printLog("Unique key for your file :" + fileInfo.keyname);
+
+  if (fileInfo.filesizeinMB > CHUNK_SIZE) {
+    const parts = Math.ceil(fileInfo.filesizeinMB / CHUNK_SIZE);
     printLog(
       "Dividing " +
-        filesizeinMB +
+        fileInfo.filesizeinMB +
         " MB file in " +
         parts +
         "parts of " +
@@ -48,16 +66,13 @@ imageForm.addEventListener("submit", async (event) => {
     );
     async function getUploadId() {
       try {
-        const response = await fetch(
-          "https://u3rl4do60b.execute-api.us-east-1.amazonaws.com/dev/initiate-multipart",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(initiateData),
-          }
-        );
+        const response = await fetch(File.multipartInitiateApiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(initiateMultipartBody),
+        });
 
         const data = await response.json();
         printLog("Recieved UploadId :" + data.uploadId);
@@ -70,23 +85,21 @@ imageForm.addEventListener("submit", async (event) => {
     printLog("Requested UploadId for multi-part operation");
     const uploadId = await getUploadId();
 
-    const dataToSend = {
-      fileName,
-      BucketName,
+    const multipartBody = {
+      fileName: fileInfo.keyname,
       uploadId,
       parts,
     };
+
     printLog("Initiated Multi-part upload using UploadId :" + uploadId);
-    fetch(
-      "https://6ctfudi0sg.execute-api.us-east-1.amazonaws.com/dev/multipart-upload",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(dataToSend),
-      }
-    )
+
+    fetch(File.multipartUploadApiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(multipartBody),
+    })
       .then((response) => response.json())
       .then((dataObject) => {
         // Convert the received JSON object back to a Map
@@ -94,14 +107,14 @@ imageForm.addEventListener("submit", async (event) => {
         printLog("Recieved Map of Presigned-url corresponding to part number");
         console.log(presignedUrlsMap);
 
-        async function uploadFileInChunks(file) {
+        async function uploadFileInChunks() {
           // Read the file and split it into chunks of 5MB each
           const fileReader = new FileReader();
           let offset = 0;
           let partNumber = 1;
           const uploadPromises = []; // Array to hold all upload promises
 
-          while (offset < file.size) {
+          while (offset < fileInfo.size) {
             const chunk = file.slice(offset, offset + maxChunkSize);
             const buffer = await chunk.arrayBuffer();
             const data = new Uint8Array(buffer);
@@ -139,10 +152,10 @@ imageForm.addEventListener("submit", async (event) => {
           }
         }
 
-        async function main() {
+        async function multipartUpload() {
           try {
             printLog("Started Uploading files in chunk");
-            await uploadFileInChunks(file);
+            await uploadFileInChunks();
             printLog("Successfully uploaded file in chunks");
 
             function sortCompletePartsByPartNumber(completeParts) {
@@ -153,23 +166,19 @@ imageForm.addEventListener("submit", async (event) => {
               completeParts
             );
 
-            const completedataToSend = {
-              fileName,
-              BucketName,
+            const completedataBody = {
+              fileName: fileInfo.keyname,
               uploadId,
               sortedCompleteParts,
             };
             printLog("Calling Complete Upload Funciton");
-            await fetch(
-              "https://yfpe8cha8i.execute-api.us-east-1.amazonaws.com/dev/complete-upload",
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify(completedataToSend),
-              }
-            )
+            await fetch(File.completeUploadApiUrl, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(completedataBody),
+            })
               .then((response) => response.json())
               .then((data) => {
                 const message = data.message;
@@ -179,7 +188,7 @@ imageForm.addEventListener("submit", async (event) => {
             console.error("Error uploading the file:", error);
           }
         }
-        main();
+        multipartUpload();
       })
       .catch((error) => {
         console.log("Error:", error);
@@ -187,35 +196,31 @@ imageForm.addEventListener("submit", async (event) => {
   } else {
     // get secure url from our server
     const singledataToSend = {
-      fileName,
-      BucketName,
+      fileName: fileInfo.keyname,
     };
     printLog("Sending request to lambda to upload single file");
-    await fetch(
-      "https://9qg7r5m84e.execute-api.us-east-1.amazonaws.com/dev/single-upload",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(singledataToSend),
-      }
-    )
+    await fetch(File.singleUploadApiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(singledataToSend),
+    })
       .then((response) => response.json()) // Parse the response JSON
       .then((data) => {
         // Access the response data here
-        console.log("Url from Lambda function:", data.url);
+        const presignedurl = data.url;
+        printLog("Url from Lambda function:" + presignedurl);
 
         printLog("Request recieved from backend server");
 
         printLog(
-          "Sending Upload file Request to S3 using upload url : ",
-          data.url
+          "Sending Upload file Request to S3 using upload url : " + presignedurl
         );
 
         // post the image direclty to the s3 bucket
-        async function uploadfile(data) {
-          const { url } = await fetch(data.url, {
+        async function uploadfile(presignedurl) {
+          const { url } = await fetch(presignedurl, {
             method: "PUT",
             headers: {
               "Content-Type": "multipart/form-data",
@@ -226,7 +231,7 @@ imageForm.addEventListener("submit", async (event) => {
           printLog("Successfull Uploaded the file");
           printLog("fileurl : " + fileurl);
         }
-        uploadfile(data);
+        uploadfile(presignedurl);
       })
       .catch((error) => {
         console.error("Error in fetching data:", error);

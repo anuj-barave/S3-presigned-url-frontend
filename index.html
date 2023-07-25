@@ -12,6 +12,15 @@
   <body>
     <form id="imageForm">
       <input id="fileinput" type="file" />
+      <label for="chunk-select">Choose chunk size:</label>
+
+      <select name="chunk" id="chunk-select">
+        <option value="">--Please choose an option--</option>
+        <option value="8">8 MB</option>
+        <option value="16">16 MB</option>
+        <option value="32">32 MB</option>
+        <option value="128">128 MB</option>
+      </select>
       <button type="submit">Upload</button>
     </form>
 

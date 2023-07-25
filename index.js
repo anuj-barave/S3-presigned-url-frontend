@@ -144,11 +144,20 @@ imageForm.addEventListener("submit", async (event) => {
             printLog("Started Uploading files in chunk");
             await uploadFileInChunks(file);
             printLog("Successfully uploaded file in chunks");
+
+            function sortCompletePartsByPartNumber(completeParts) {
+              return completeParts.sort((a, b) => a.PartNumber - b.PartNumber);
+            }
+
+            const sortedCompleteParts = await sortCompletePartsByPartNumber(
+              completeParts
+            );
+
             const completedataToSend = {
               fileName,
               BucketName,
               uploadId,
-              completeParts,
+              sortedCompleteParts,
             };
             printLog("Calling Complete Upload Funciton");
             await fetch(

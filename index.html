@@ -11,17 +11,25 @@
   </head>
   <body>
     <form id="imageForm">
-      <input id="fileinput" type="file" />
+      <input id="fileinput" type="file" multiple />
       <label for="chunk-select">Choose chunk size:</label>
 
       <select name="chunk" id="chunk-select">
-        <option value="">--Please choose an option--</option>
+        <option value="5">Default 5 MB</option>
         <option value="8">8 MB</option>
         <option value="16">16 MB</option>
         <option value="32">32 MB</option>
         <option value="64">64 MB</option>
         <option value="128">128 MB</option>
         <option value="256">256 MB</option>
+      </select>
+      <label for="batch-size">Choose chunks per Batch:</label>
+      <select name="batch" id="batch-size">
+        <option value="1">Default 1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="5">5</option>
       </select>
       <button type="submit">Upload</button>
     </form>
